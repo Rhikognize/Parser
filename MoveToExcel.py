@@ -5,7 +5,7 @@ def create_excel():
     wb = Workbook()
 
     ws = wb.active
-    ws.title = "Real estate data(rent)"
+    ws.title = "Real estate data"
     headers = [
         "Title",
         "Location",
@@ -17,6 +17,10 @@ def create_excel():
         "Price",
         "Floor",
         "Heating",
+        "Has furniture",
+        "Has AC",
+        "Has underfloor heating",
+        "Has double glazed windows",
         "Destination",
         "URL",
     ]

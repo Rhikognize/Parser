@@ -1,15 +1,18 @@
 from requests import Session
 import requests
 from bs4 import BeautifulSoup
-from time import sleep
 from math import ceil
-from random import uniform
 from playwright.sync_api import sync_playwright
 import time
 from MoveToExcel import create_excel, save_to_excel
+import re
+import os
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 BASE_URL = "https://immobiliare.md"
+ADDITIONAL_URL = "https://immobiliare.md"
+PAGE_COUNT = 0
+CARD_COUNT = 0
 
 
 def get_info(link, session, index):
@@ -18,6 +21,11 @@ def get_info(link, session, index):
 
     soup = BeautifulSoup(response.text, "lxml")
     data = soup.find("div", class_="space-y-6 md:space-y-10")
+
+    text = data.find(
+        "div",
+        class_="text-[13px] md:text-base text-gray-600 leading-relaxed whitespace-pre-line",
+    ).text
 
     data_price = soup.find(
         "div",
@@ -54,13 +62,25 @@ def get_info(link, session, index):
     area = info.get("Suprafață", "")
     rooms = info.get("Camere", "")
     shower_rooms = info.get("Băi", "")
-    floor = info.get("Etaj", "")
     housing_stock = info.get("Fond locativ", "")
     heating = info.get("Încălzire", "")
     destination = info.get("Destinație", "")
-
+    floor = info.get("Etaj", "")
+    if floor == "":
+        match = re.search(r"Nivelul\s+(\d/\d)", text)
+        if match:
+            floor = match.group(1)
+    has_double_glazed_windows = "geamuri termopan" in text
+    has_AC = "aparat de aer condiționat" in text
+    has_underfloor_heating = "încălzire prin pardoseală" in text
+    has_furniture = "toată mobila" in text
     print(
-        f"URL: {link}\nTitle: {title}\nLocation: {location}\nType: {type_}\nArea: {area}\nRooms: {rooms}\nShower rooms: {shower_rooms}\nFloor: {floor}\nHousing stock: {housing_stock}\nHeating: {heating}\nDestination: {destination}\nPrice: {price}\n{index + 1}/{CARD_COUNT}\n{'-' * 50}"
+        f"URL: {link}\nTitle: {title}\n"
+        + f"Location: {location}\nType: {type_}\nArea: {area}\nRooms: {rooms}\nShower rooms: {shower_rooms}\n"
+        + f"Floor: {floor}\nHousing stock: {housing_stock}\nHeating: {heating}\nDestination: {destination}\n"
+        + f"Price: {price}\nAre mobila: {has_furniture}\nAre geamuri termopan: {has_double_glazed_windows}\n"
+        + f"Are aer condiționat: {has_AC}\nAre încălzire prin pardoseală: {has_underfloor_heating}\n"
+        + f"{index + 1}/{CARD_COUNT}\n{'-' * 50}"
     )
     return (
         title,
@@ -73,6 +93,10 @@ def get_info(link, session, index):
         price,
         floor,
         heating,
+        has_furniture,
+        has_AC,
+        has_underfloor_heating,
+        has_double_glazed_windows,
         destination,
         link,
     )
@@ -80,9 +104,9 @@ def get_info(link, session, index):
 
 def scroll_and_load():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto("https://immobiliare.md/rent", wait_until="networkidle")
+        page.goto(ADDITIONAL_URL, wait_until="networkidle")
 
         time.sleep(3)
         for i in range(PAGE_COUNT):
@@ -114,16 +138,24 @@ def scroll_and_load():
 
 
 def count_page():
-    response = requests.get(BASE_URL + "/rent", headers=HEADERS)
+    response = requests.get(ADDITIONAL_URL, headers=HEADERS)
     soup = BeautifulSoup(response.text, "lxml")
     card_count = soup.find("span", class_="text-primary font-bold").text
     page_count = ceil(int(card_count) / 16)
     return page_count, int(card_count)
 
 
-PAGE_COUNT, CARD_COUNT = count_page()
-
 if __name__ == "__main__":
+    choice = input("Press S for sales-only or R for rent-only: ")
+    start = time.perf_counter()
+    if choice.lower() == "s":
+        ADDITIONAL_URL = BASE_URL + "/sale"
+    elif choice.lower() == "r":
+        ADDITIONAL_URL = BASE_URL + "/rent"
+    else:
+        print("Invalid choice, defaulting to sales-only.")
+        ADDITIONAL_URL = BASE_URL + "/sale"
+    PAGE_COUNT, CARD_COUNT = count_page()
     wb, ws = create_excel()
     row = 2
     links = scroll_and_load()
@@ -132,4 +164,9 @@ if __name__ == "__main__":
         data = get_info(link, session, i)
         save_to_excel(ws, row, data)
         row += 1
-    wb.save("real_estate_data(rent).xlsx")
+    filename = "Real_estate_data.xlsx"
+    if os.path.exists(filename):
+        os.remove(filename)
+    wb.save("Real_estate_data.xlsx")
+    end = time.perf_counter()
+    print(f"Elapsed time: {end - start:.6f} seconds")
