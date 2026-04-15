@@ -17,7 +17,7 @@ CSS = {
     "location": "flex items-center text-sm md:text-base text-slate-500 font-medium",
     "additional": "flex justify-between py-1.5 md:py-2 border-b border-gray-50",
     "key": "text-slate-500 text-[13px] md:text-sm",
-    "value": "text-sm md:text-base text-gray-900 font-medium",
+    "value": "font-semibold text-gray-900 text-[13px] md:text-sm",
 }
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 BASE_URL = "https://immobiliare.md"
