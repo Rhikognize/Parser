@@ -8,7 +8,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
-
+# Constants for CSS selectors, headers, base URL, and filename
 CSS = {
     "data_container": "space-y-6 md:space-y-10",
     "text": "text-[13px] md:text-base text-gray-600 leading-relaxed whitespace-pre-line",
@@ -23,10 +23,12 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 BASE_URL = "https://immobiliare.md"
 FILENAME = "Real_estate_data.xlsx"
 
+# Thread-local storage for sessions to ensure thread safety in parallel processing
 thread_local = threading.local()
 
 
 def request(link, session):
+    """Makes an HTTP GET request to the specified link using the provided session."""
     response = session.get(link, headers=HEADERS)
     if response.status_code != 200:
         print(
@@ -37,6 +39,7 @@ def request(link, session):
 
 
 def parsing(soup):
+    """Parses the BeautifulSoup object to extract real estate information."""
     info = {}
     data = soup.find("div", class_=CSS["data_container"])
     if not data:
@@ -97,6 +100,7 @@ def safe_text(element):
 
 
 def extract_features(text):
+    """Extracts specific features from the given text and returns a dictionary with boolean values indicating the presence of each feature."""
     t = text.lower()
     return {
         "has_double_glazed_windows": "geamă termopan" in t,
@@ -107,6 +111,7 @@ def extract_features(text):
 
 
 def extract_floor(text):
+    """Extracts the floor information from the given text using a regular expression. Returns the floor information if found, otherwise returns an empty string."""
     match = re.search(r"Nivelul\s+(\d/\d)", text)
     if match:
         return match.group(1)
@@ -114,6 +119,7 @@ def extract_floor(text):
 
 
 def get_info(link, session):
+    """Fetches the HTML content of the given link using the provided session, parses it to extract real estate information, and returns a dictionary containing the extracted data."""
     html = request(link, session)
     if html is None:
         print(f"Skipping URL {link} due to request issues.")
@@ -155,12 +161,12 @@ def get_info(link, session):
 
 
 def scroll_and_load(url):
-
+    """Scrolls through the webpage at the given URL, clicking the 'Încarcă' button to load more content until all content is loaded. Extracts and returns a list of URLs for individual real estate listings found on the page."""
     with sync_playwright() as p:
         previous_height = 0
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(additional_url, wait_until="networkidle")
+        page.goto(url, wait_until="networkidle")
         button = page.locator("button:has-text('Încarcă')")
         time.sleep(3)
         while True:
@@ -190,6 +196,8 @@ def scroll_and_load(url):
 
 
 def get_session():
+    """One session per thread — reusing sessions improves performance
+    while avoiding thread-safety issues with shared state."""
     if not hasattr(thread_local, "session"):
         thread_local.session = Session()
     return thread_local.session
@@ -214,9 +222,11 @@ if __name__ == "__main__":
     else:
         print("Invalid choice, defaulting to sales-only.")
         additional_url = BASE_URL + "/sale"
+
     wb, ws = create_excel()
     row = 2
     links = scroll_and_load(additional_url)
+
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(wrapper, links))
     for result in results:
